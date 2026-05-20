@@ -214,7 +214,7 @@ ${itemsList}
           </div>
           <div className="max-w-lg mx-auto">
             <PixPayment
-              total={getCartSubtotal() + (neighborhoods.find((n) => n.nome === customer.neighborhood)?.taxa_entrega ?? settings.deliveryFee)}
+              total={total}
               orderNumber={pixOrder.number}
               onPaymentConfirmed={handlePixConfirmed}
             />
