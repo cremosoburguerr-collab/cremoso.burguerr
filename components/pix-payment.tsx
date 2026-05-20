@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Copy, CheckCircle2, QrCode, Clock } from 'lucide-react'
+import { Copy, CheckCircle2, QrCode, Clock, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface PixPaymentProps {
@@ -10,40 +10,65 @@ interface PixPaymentProps {
   onPaymentConfirmed?: () => void
 }
 
+interface PixData {
+  id: number
+  qr_code: string
+  qr_code_base64: string | null
+  status: string
+}
+
 export function PixPayment({ total, orderNumber, onPaymentConfirmed }: PixPaymentProps) {
   const [copied, setCopied] = useState(false)
   const [checking, setChecking] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [pixData, setPixData] = useState<PixData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Generate a mock PIX code (in production, this would come from your payment gateway)
-  const pixCode = `00020126580014br.gov.bcb.pix0136cremoso-burguer-${orderNumber}5204000053039865802BR5925CREMOSO BURGUER LTDA6009SAO PAULO62070503***6304${String(Math.floor(total * 100)).padStart(4, '0')}`
+  useEffect(() => {
+    const createPix = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/pix/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ total, orderNumber }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Erro ao gerar PIX')
+        setPixData(data)
+      } catch (err: any) {
+        setError(err.message || 'Erro ao gerar cobrança PIX')
+      } finally {
+        setLoading(false)
+      }
+    }
+    createPix()
+  }, [total, orderNumber])
 
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    })
-  }
+  const formatPrice = (price: number) =>
+    price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  const pixCode = pixData?.qr_code ?? ''
 
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(pixCode)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
+    } catch {
+      console.error('Failed to copy')
     }
   }
 
-  // Simulate checking payment status
-  const checkPayment = () => {
+  const handleConfirm = () => {
     setChecking(true)
-    // In production, this would call your payment gateway API
     setTimeout(() => {
       setChecking(false)
       setConfirmed(true)
       onPaymentConfirmed?.()
-    }, 2000)
+    }, 1500)
   }
 
   if (confirmed) {
@@ -65,72 +90,91 @@ export function PixPayment({ total, orderNumber, onPaymentConfirmed }: PixPaymen
         <p className="text-3xl font-bold text-primary">{formatPrice(total)}</p>
       </div>
 
-      {/* QR Code Placeholder */}
-      <div className="flex justify-center">
-        <div className="w-48 h-48 bg-foreground rounded-lg p-4 relative">
-          {/* This would be a real QR code in production */}
-          <div className="w-full h-full bg-background rounded flex items-center justify-center">
-            <QrCode className="w-24 h-24 text-foreground" />
+      {loading && (
+        <div className="flex flex-col items-center gap-3 py-8">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">Gerando cobrança PIX...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex flex-col items-center gap-3 py-4">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="w-5 h-5" />
+            <p className="text-sm font-medium">{error}</p>
           </div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="bg-foreground p-2 rounded">
-              <QrCode className="w-8 h-8 text-background" />
+          <p className="text-xs text-muted-foreground text-center">
+            Verifique se o token do Mercado Pago está configurado nas variáveis de ambiente.
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && pixData && (
+        <>
+          {/* QR Code */}
+          <div className="flex justify-center">
+            <div className="w-52 h-52 bg-white rounded-xl p-3 shadow-md flex items-center justify-center">
+              {pixData.qr_code_base64 ? (
+                <img
+                  src={`data:image/png;base64,${pixData.qr_code_base64}`}
+                  alt="QR Code PIX"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <QrCode className="w-28 h-28 text-foreground" />
+              )}
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* PIX Code */}
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground text-center">Ou copie o código PIX:</p>
-        <div className="flex gap-2">
-          <div className="flex-1 p-3 bg-muted rounded-lg text-xs text-foreground font-mono overflow-hidden text-ellipsis whitespace-nowrap">
-            {pixCode}
+          {/* PIX Copia e Cola */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground text-center">Ou copie o código PIX:</p>
+            <div className="flex gap-2">
+              <div className="flex-1 p-3 bg-muted rounded-lg text-xs text-foreground font-mono overflow-hidden text-ellipsis whitespace-nowrap">
+                {pixCode}
+              </div>
+              <Button onClick={copyToClipboard} variant="outline" className="shrink-0">
+                {copied ? (
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
           </div>
+
+          {/* Confirm Button */}
           <Button
-            onClick={copyToClipboard}
-            variant="outline"
-            className="shrink-0"
+            onClick={handleConfirm}
+            disabled={checking}
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
           >
-            {copied ? (
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
+            {checking ? (
+              <>
+                <Clock className="w-4 h-4 mr-2 animate-spin" />
+                Verificando pagamento...
+              </>
             ) : (
-              <Copy className="w-4 h-4" />
+              'Já paguei'
             )}
           </Button>
-        </div>
-      </div>
 
-      {/* Check Payment Button */}
-      <Button
-        onClick={checkPayment}
-        disabled={checking}
-        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-      >
-        {checking ? (
-          <>
-            <Clock className="w-4 h-4 mr-2 animate-spin" />
-            Verificando pagamento...
-          </>
-        ) : (
-          'Já paguei'
-        )}
-      </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            O QR Code expira em 30 minutos. Após o pagamento, clique em "Já paguei".
+          </p>
 
-      <p className="text-xs text-muted-foreground text-center">
-        O pagamento será confirmado automaticamente em até 30 segundos após o PIX ser realizado.
-      </p>
-
-      {/* Instructions */}
-      <div className="border-t border-border pt-4">
-        <p className="text-sm font-medium text-foreground mb-2">Como pagar:</p>
-        <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-          <li>Abra o app do seu banco</li>
-          <li>Escolha pagar com PIX</li>
-          <li>Escaneie o QR Code ou cole o código</li>
-          <li>Confirme o pagamento</li>
-        </ol>
-      </div>
+          {/* Instructions */}
+          <div className="border-t border-border pt-4">
+            <p className="text-sm font-medium text-foreground mb-2">Como pagar:</p>
+            <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Abra o app do seu banco</li>
+              <li>Escolha pagar com PIX</li>
+              <li>Escaneie o QR Code ou cole o código</li>
+              <li>Confirme o pagamento</li>
+            </ol>
+          </div>
+        </>
+      )}
     </div>
   )
 }

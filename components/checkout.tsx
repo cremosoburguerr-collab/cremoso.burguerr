@@ -6,6 +6,7 @@ import { useStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PixPayment } from '@/components/pix-payment'
 import type { Customer, PaymentMethod, Order } from '@/lib/types'
 
 interface CheckoutProps {
@@ -41,6 +42,7 @@ export function Checkout({ onBack, onComplete }: CheckoutProps) {
   const [neighborhoods, setNeighborhoods] = useState<Bairro[]>([])
   const [loadingNeighborhoods, setLoadingNeighborhoods] = useState(true)
   const [neighborhoodsError, setNeighborhoodsError] = useState(false)
+  const [pixOrder, setPixOrder] = useState<Order | null>(null)
 
   useEffect(() => {
     const fetchBairros = async () => {
@@ -143,9 +145,83 @@ ${itemsList}${globalObsLine}
       return
     }
 
+    if (selectedPayment === 'pix') {
+      setIsSubmitting(false)
+      setPixOrder(order)
+      return
+    }
+
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
     setIsSubmitting(false)
     onComplete(order)
+  }
+
+  const handlePixConfirmed = () => {
+    if (!pixOrder) return
+    const rawPhone = settings?.whatsapp
+    if (rawPhone) {
+      const phone = rawPhone.replace(/\D/g, '')
+      const itemsList = cart
+        .map((item) => {
+          const addonsPrice = (item.addons || []).reduce(
+            (s, sa) => s + sa.addon.price * sa.quantity,
+            0
+          )
+          const unitPrice = item.product.price + addonsPrice
+          const addonsStr =
+            item.addons && item.addons.length > 0
+              ? `\n   Adicionais: ${item.addons.map((sa) => `${sa.quantity > 1 ? `${sa.quantity}x ` : ''}${sa.addon.name}`).join(', ')}`
+              : ''
+          return `• ${item.quantity}x ${item.product.name} — ${formatPrice(unitPrice * item.quantity)}${addonsStr}`
+        })
+        .join('\n')
+      const neighborhoodFeeVal =
+        neighborhoods.find((n) => n.nome === customer.neighborhood)?.taxa_entrega ??
+        settings.deliveryFee
+      const totalVal = getCartSubtotal() + neighborhoodFeeVal
+      const message = `🍔 *NOVO PEDIDO - CREMOSO BURGUER*
+
+📦 *Pedido:* #${String(pixOrder.number).padStart(3, '0')}
+
+👤 *Cliente:* ${customer.name}
+📞 *Telefone:* ${customer.phone}
+📍 *Endereço:* ${customer.address}
+🏘️ *Bairro:* ${customer.neighborhood}
+
+🍟 *Itens:*
+${itemsList}
+
+🚚 *Taxa de entrega:* ${formatPrice(neighborhoodFeeVal)}
+💰 *TOTAL:* ${formatPrice(totalVal)}
+
+💳 *Pagamento:* PIX ✅ Pago`
+      if (phone && phone.length >= 10) {
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
+      }
+    }
+    onComplete(pixOrder)
+  }
+
+  if (pixOrder) {
+    return (
+      <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
+        <div className="min-h-screen">
+          <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center gap-4 z-10">
+            <button onClick={() => setPixOrder(null)} className="p-2 rounded-full hover:bg-muted transition-colors">
+              <ArrowLeft className="w-5 h-5 text-foreground" />
+            </button>
+            <h2 className="text-xl font-bold text-foreground">PAGAR COM PIX</h2>
+          </div>
+          <div className="max-w-lg mx-auto">
+            <PixPayment
+              total={getCartSubtotal() + (neighborhoods.find((n) => n.nome === customer.neighborhood)?.taxa_entrega ?? settings.deliveryFee)}
+              orderNumber={pixOrder.number}
+              onPaymentConfirmed={handlePixConfirmed}
+            />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
