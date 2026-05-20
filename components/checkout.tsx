@@ -43,6 +43,7 @@ export function Checkout({ onBack, onComplete }: CheckoutProps) {
   const [loadingNeighborhoods, setLoadingNeighborhoods] = useState(true)
   const [neighborhoodsError, setNeighborhoodsError] = useState(false)
   const [pixOrder, setPixOrder] = useState<Order | null>(null)
+  const [pixTotal, setPixTotal] = useState<number>(0)
 
   useEffect(() => {
     const fetchBairros = async () => {
@@ -147,6 +148,9 @@ ${itemsList}${globalObsLine}
 
     if (selectedPayment === 'pix') {
       setIsSubmitting(false)
+      // total capturado ANTES do addOrder limpar o carrinho
+      console.log(`[PIX Checkout] subtotal: ${subtotal}, taxa: ${neighborhoodFee}, total final: ${total}`)
+      setPixTotal(total)
       setPixOrder(order)
       return
     }
@@ -178,7 +182,7 @@ ${itemsList}${globalObsLine}
       const neighborhoodFeeVal =
         neighborhoods.find((n) => n.nome === customer.neighborhood)?.taxa_entrega ??
         settings.deliveryFee
-      const totalVal = getCartSubtotal() + neighborhoodFeeVal
+      const totalVal = pixTotal
       const message = `🍔 *NOVO PEDIDO - CREMOSO BURGUER*
 
 📦 *Pedido:* #${String(pixOrder.number).padStart(3, '0')}
@@ -214,7 +218,7 @@ ${itemsList}
           </div>
           <div className="max-w-lg mx-auto">
             <PixPayment
-              total={total}
+              total={pixTotal}
               orderNumber={pixOrder.number}
               onPaymentConfirmed={handlePixConfirmed}
             />
