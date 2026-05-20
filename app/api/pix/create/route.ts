@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       transaction_amount: Number(Number(total).toFixed(2)),
       description: `Pedido #${String(orderNumber).padStart(3, '0')} - Cremoso Burguer`,
       payment_method_id: 'pix',
+      external_reference: String(orderNumber),
       payer: {
         email: 'cliente@cremoso.com.br',
         first_name: 'Cliente',

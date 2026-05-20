@@ -47,6 +47,27 @@ export function PixPayment({ total, orderNumber, onPaymentConfirmed }: PixPaymen
     createPix()
   }, [total, orderNumber])
 
+  // Polling automático — verifica status a cada 5s após QR Code gerado
+  useEffect(() => {
+    if (!pixData?.id || confirmed) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/pix/status/${pixData.id}`)
+        const data = await res.json()
+        if (data.status === 'approved') {
+          clearInterval(interval)
+          setConfirmed(true)
+          onPaymentConfirmed?.()
+        }
+      } catch {
+        // silencia erro de rede, tenta novamente no próximo ciclo
+      }
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [pixData?.id, confirmed, onPaymentConfirmed])
+
   const formatPrice = (price: number) =>
     price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -160,7 +181,7 @@ export function PixPayment({ total, orderNumber, onPaymentConfirmed }: PixPaymen
           </Button>
 
           <p className="text-xs text-muted-foreground text-center">
-            O QR Code expira em 30 minutos. Após o pagamento, clique em "Já paguei".
+            O pagamento será confirmado automaticamente. O QR Code expira em 30 minutos.
           </p>
 
           {/* Instructions */}
