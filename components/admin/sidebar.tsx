@@ -4,14 +4,17 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { 
-  LayoutDashboard, 
   UtensilsCrossed, 
   ShoppingBag, 
   BarChart3, 
   Settings, 
   Users,
   ChefHat,
-  LogOut 
+  LogOut,
+  Tag,
+  Users2,
+  Package,
+  Landmark,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useRouter } from 'next/navigation'
@@ -20,6 +23,10 @@ const menuItems = [
   { href: '/equipe/admin', label: 'Painel da Cozinha', icon: ChefHat },
   { href: '/equipe/admin/pedidos', label: 'Pedidos', icon: ShoppingBag },
   { href: '/equipe/admin/cardapio', label: 'Cardápio', icon: UtensilsCrossed },
+  { href: '/equipe/admin/caixa', label: 'Caixa', icon: Landmark },
+  { href: '/equipe/admin/cupons', label: 'Cupons', icon: Tag },
+  { href: '/equipe/admin/crm', label: 'CRM Clientes', icon: Users2 },
+  { href: '/equipe/admin/estoque', label: 'Estoque', icon: Package },
   { href: '/equipe/admin/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/equipe/admin/configuracoes', label: 'Configurações', icon: Settings },
   { href: '/equipe/admin/usuarios', label: 'Usuários', icon: Users },

@@ -11,6 +11,7 @@ import { Cart } from '@/components/cart'
 import { Checkout } from '@/components/checkout'
 import { OrderTracking } from '@/components/order-tracking'
 import { StatusBanner } from '@/components/status-banner'
+import { OrderAgain } from '@/components/order-again'
 import { useStore } from '@/lib/store'
 import type { Order } from '@/lib/types'
 
@@ -50,6 +51,7 @@ export default function Home() {
           </div>
           <Hero />
           <Benefits />
+          <OrderAgain />
           <Menu />
           <About />
           <Footer />

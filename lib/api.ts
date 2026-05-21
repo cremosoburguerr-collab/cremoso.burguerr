@@ -161,8 +161,11 @@ export async function createOrder(input: {
   deliveryFee: number
   paymentMethod: PaymentMethod
   observation?: string
+  discount?: number
+  couponCode?: string
 }): Promise<Order> {
   const numero_pedido = await nextOrderNumber()
+  const discount = input.discount ?? 0
   const observacoes = JSON.stringify({ items: input.items, observation: input.observation || '' })
   const payload = {
     numero_pedido,
@@ -175,7 +178,7 @@ export async function createOrder(input: {
     status: 'novo',
     subtotal: input.subtotal,
     taxa_entrega: input.deliveryFee,
-    total: input.subtotal + input.deliveryFee,
+    total: input.subtotal + input.deliveryFee - discount,
   }
   const { data, error } = await supabase.from('pedidos').insert(payload).select().single()
   if (error) throw error
@@ -197,7 +200,9 @@ export async function createOrder(input: {
     items: input.items,
     subtotal: input.subtotal,
     deliveryFee: input.deliveryFee,
-    total: input.subtotal + input.deliveryFee,
+    total: input.subtotal + input.deliveryFee - discount,
+    discount,
+    couponCode: input.couponCode,
     paymentMethod: input.paymentMethod,
     status: 'novo' as OrderStatus,
     observation: input.observation || '',

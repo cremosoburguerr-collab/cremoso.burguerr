@@ -71,7 +71,9 @@ interface AppState {
     customer: Customer,
     paymentMethod: PaymentMethod,
     deliveryFee: number,
-    observation?: string
+    observation?: string,
+    discount?: number,
+    couponCode?: string
   ) => Promise<Order | null>
   updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>
   setCurrentOrder: (order: Order | null) => void
@@ -253,7 +255,7 @@ export const useStore = create<AppState>()(
 
       currentOrder: null,
 
-      addOrder: async (customer, paymentMethod, deliveryFee, observation?) => {
+      addOrder: async (customer, paymentMethod, deliveryFee, observation?, discount?, couponCode?) => {
         const { cart, getCartSubtotal } = get()
 
         try {
@@ -264,6 +266,8 @@ export const useStore = create<AppState>()(
             deliveryFee,
             paymentMethod,
             observation,
+            discount,
+            couponCode,
           })
 
           set((state) => ({

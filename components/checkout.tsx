@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Phone, MapPin, CreditCard, Banknote, QrCode, Link, MessageSquare, Loader2 } from 'lucide-react'
+import { ArrowLeft, Phone, MapPin, CreditCard, Banknote, QrCode, Link, MessageSquare, Loader2, Tag, X, Check } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PixPayment } from '@/components/pix-payment'
 import type { Customer, PaymentMethod, Order } from '@/lib/types'
+import { HISTORY_KEY, type HistoryOrder } from '@/components/order-again'
 
 interface CheckoutProps {
   onBack: () => void
@@ -20,12 +21,39 @@ interface Bairro {
   taxa_entrega: number
 }
 
+interface CupomValidado {
+  id: string
+  codigo: string
+  desconto_tipo: 'percentual' | 'fixo'
+  desconto_valor: number
+}
+
 const paymentMethods: { id: PaymentMethod; label: string; icon: React.ElementType }[] = [
   { id: 'pix', label: 'Pix', icon: QrCode },
   { id: 'cartao', label: 'Cartão', icon: CreditCard },
   { id: 'dinheiro', label: 'Dinheiro', icon: Banknote },
   { id: 'link', label: 'Link de pagamento', icon: Link },
 ]
+
+function saveOrderHistory(order: Order) {
+  try {
+    const prev: HistoryOrder[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
+    const entry: HistoryOrder = {
+      id: order.id,
+      number: order.number,
+      date: new Date().toISOString(),
+      items: order.items.map(i => ({
+        product: i.product,
+        quantity: i.quantity,
+        addons: i.addons || [],
+        observation: i.observation || '',
+      })),
+      total: order.total,
+    }
+    const updated = [entry, ...prev.filter(o => o.id !== order.id)].slice(0, 10)
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated))
+  } catch { /* ignore */ }
+}
 
 export function Checkout({ onBack, onComplete }: CheckoutProps) {
   const { cart, getCartSubtotal, settings, addOrder } = useStore()
@@ -44,6 +72,11 @@ export function Checkout({ onBack, onComplete }: CheckoutProps) {
   const [neighborhoodsError, setNeighborhoodsError] = useState(false)
   const [pixOrder, setPixOrder] = useState<Order | null>(null)
   const [pixTotal, setPixTotal] = useState<number>(0)
+
+  const [couponCode, setCouponCode] = useState('')
+  const [couponValidating, setCouponValidating] = useState(false)
+  const [couponError, setCouponError] = useState('')
+  const [cupomValidado, setCupomValidado] = useState<CupomValidado | null>(null)
 
   useEffect(() => {
     const fetchBairros = async () => {
@@ -68,10 +101,49 @@ export function Checkout({ onBack, onComplete }: CheckoutProps) {
   const neighborhoodFee =
     neighborhoods.find((n) => n.nome === customer.neighborhood)?.taxa_entrega ??
     settings.deliveryFee
-  const total = subtotal + neighborhoodFee
+
+  const discountValue = cupomValidado
+    ? cupomValidado.desconto_tipo === 'percentual'
+      ? Math.round(subtotal * cupomValidado.desconto_valor) / 100
+      : Math.min(cupomValidado.desconto_valor, subtotal)
+    : 0
+
+  const total = subtotal + neighborhoodFee - discountValue
 
   const formatPrice = (price: number) =>
     price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  const handleValidateCoupon = async () => {
+    const code = couponCode.trim().toUpperCase()
+    if (!code) return
+    setCouponValidating(true)
+    setCouponError('')
+    try {
+      const res = await fetch('/api/cupom/validar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: code }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setCouponError(json.error || 'Cupom inválido')
+        setCupomValidado(null)
+      } else {
+        setCupomValidado(json.cupom)
+        setCouponError('')
+      }
+    } catch {
+      setCouponError('Erro ao validar cupom')
+    } finally {
+      setCouponValidating(false)
+    }
+  }
+
+  const handleRemoveCoupon = () => {
+    setCupomValidado(null)
+    setCouponCode('')
+    setCouponError('')
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,11 +155,27 @@ export function Checkout({ onBack, onComplete }: CheckoutProps) {
 
     setIsSubmitting(true)
 
-    const order = await addOrder(customer, selectedPayment, neighborhoodFee, observation)
+    const order = await addOrder(
+      customer,
+      selectedPayment,
+      neighborhoodFee,
+      observation,
+      discountValue > 0 ? discountValue : undefined,
+      cupomValidado?.codigo,
+    )
     if (!order) {
       setIsSubmitting(false)
       alert('Não foi possível criar o pedido. Tente novamente.')
       return
+    }
+
+    // Increment coupon usage
+    if (cupomValidado?.codigo) {
+      fetch('/api/cupom/usar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: cupomValidado.codigo }),
+      }).catch(() => { /* silent */ })
     }
 
     const itemsList = cart
@@ -113,6 +201,10 @@ export function Checkout({ onBack, onComplete }: CheckoutProps) {
       ? `\n📝 *Observação geral:*\n${observation.trim()}`
       : ''
 
+    const discountLine = discountValue > 0
+      ? `\n💸 *Desconto${cupomValidado ? ` (${cupomValidado.codigo})` : ''}:* -${formatPrice(discountValue)}`
+      : ''
+
     const message = `🍔 *NOVO PEDIDO - CREMOSO BURGUER*
 
 📦 *Pedido:* #${String(order.number).padStart(3, '0')}
@@ -125,7 +217,7 @@ export function Checkout({ onBack, onComplete }: CheckoutProps) {
 🍟 *Itens:*
 ${itemsList}${globalObsLine}
 
-🚚 *Taxa de entrega:* ${formatPrice(neighborhoodFee)}
+🚚 *Taxa de entrega:* ${formatPrice(neighborhoodFee)}${discountLine}
 💰 *TOTAL:* ${formatPrice(total)}
 
 💳 *Pagamento:* ${paymentMethods.find((p) => p.id === selectedPayment)?.label}`
@@ -134,6 +226,7 @@ ${itemsList}${globalObsLine}
     if (!rawPhone) {
       alert('WhatsApp não configurado. Acesse Área da Equipe → Configurações para cadastrar o número.')
       setIsSubmitting(false)
+      saveOrderHistory(order)
       onComplete(order)
       return
     }
@@ -142,14 +235,14 @@ ${itemsList}${globalObsLine}
     if (!phone || phone.length < 10) {
       alert('Número de WhatsApp inválido. Verifique nas Configurações.')
       setIsSubmitting(false)
+      saveOrderHistory(order)
       onComplete(order)
       return
     }
 
     if (selectedPayment === 'pix') {
       setIsSubmitting(false)
-      // total capturado ANTES do addOrder limpar o carrinho
-      console.log(`[PIX Checkout] subtotal: ${subtotal}, taxa: ${neighborhoodFee}, total final: ${total}`)
+      console.log(`[PIX Checkout] subtotal: ${subtotal}, taxa: ${neighborhoodFee}, desconto: ${discountValue}, total final: ${total}`)
       setPixTotal(total)
       setPixOrder(order)
       return
@@ -157,6 +250,7 @@ ${itemsList}${globalObsLine}
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
     setIsSubmitting(false)
+    saveOrderHistory(order)
     onComplete(order)
   }
 
@@ -183,6 +277,9 @@ ${itemsList}${globalObsLine}
         neighborhoods.find((n) => n.nome === customer.neighborhood)?.taxa_entrega ??
         settings.deliveryFee
       const totalVal = pixTotal
+      const discountLine = discountValue > 0
+        ? `\n💸 *Desconto${cupomValidado ? ` (${cupomValidado.codigo})` : ''}:* -${formatPrice(discountValue)}`
+        : ''
       const message = `🍔 *NOVO PEDIDO - CREMOSO BURGUER*
 
 📦 *Pedido:* #${String(pixOrder.number).padStart(3, '0')}
@@ -195,7 +292,7 @@ ${itemsList}${globalObsLine}
 🍟 *Itens:*
 ${itemsList}
 
-🚚 *Taxa de entrega:* ${formatPrice(neighborhoodFeeVal)}
+🚚 *Taxa de entrega:* ${formatPrice(neighborhoodFeeVal)}${discountLine}
 💰 *TOTAL:* ${formatPrice(totalVal)}
 
 💳 *Pagamento:* PIX ✅ Pago`
@@ -203,6 +300,7 @@ ${itemsList}
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
       }
     }
+    saveOrderHistory(pixOrder)
     onComplete(pixOrder)
   }
 
@@ -351,6 +449,55 @@ ${itemsList}
               </div>
             </div>
 
+            {/* Coupon Code */}
+            <div className="space-y-2">
+              <Label className="text-foreground flex items-center gap-2">
+                <Tag className="w-4 h-4" /> Cupom de desconto (opcional)
+              </Label>
+              {cupomValidado ? (
+                <div className="flex items-center justify-between bg-green-500/10 border border-green-500/40 rounded-lg px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-400" />
+                    <span className="font-mono font-bold text-green-400">{cupomValidado.codigo}</span>
+                    <span className="text-sm text-green-400">
+                      — {cupomValidado.desconto_tipo === 'percentual'
+                        ? `${cupomValidado.desconto_valor}% de desconto`
+                        : `${formatPrice(cupomValidado.desconto_valor)} de desconto`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Ex: CREMOSO10"
+                    value={couponCode}
+                    onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError('') }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleValidateCoupon() } }}
+                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleValidateCoupon}
+                    disabled={couponValidating || !couponCode.trim()}
+                    className="shrink-0"
+                  >
+                    {couponValidating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
+                  </Button>
+                </div>
+              )}
+              {couponError && (
+                <p className="text-destructive text-sm">{couponError}</p>
+              )}
+            </div>
+
             {/* Order Summary */}
             <div className="bg-muted/50 rounded-lg p-4 space-y-3">
               <h3 className="font-bold text-foreground">Resumo do Pedido</h3>
@@ -380,7 +527,7 @@ ${itemsList}
                     )}
                     {item.observation && item.observation.trim() && (
                       <p className="pl-3 text-xs text-muted-foreground/60 italic">
-                        "{item.observation.trim()}"
+                        &quot;{item.observation.trim()}&quot;
                       </p>
                     )}
                   </div>
@@ -401,6 +548,12 @@ ${itemsList}
                   <span>Taxa de entrega</span>
                   <span>{formatPrice(neighborhoodFee)}</span>
                 </div>
+                {discountValue > 0 && (
+                  <div className="flex justify-between text-sm text-green-400 font-medium">
+                    <span>Desconto {cupomValidado?.codigo ? `(${cupomValidado.codigo})` : ''}</span>
+                    <span>-{formatPrice(discountValue)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-lg text-foreground">
                   <span>TOTAL</span>
                   <span className="text-primary">{formatPrice(total)}</span>

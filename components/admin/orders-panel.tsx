@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Search, Filter } from 'lucide-react'
+import { Search, Filter, MessageCircle } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { Input } from '@/components/ui/input'
 import { subscribeToOrders } from '@/lib/api'
 import type { OrderStatus } from '@/lib/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { getWhatsAppMessage, openWhatsApp } from '@/lib/whatsapp-messages'
 
 const statusColors: Record<OrderStatus, { bg: string; text: string }> = {
   novo: { bg: 'bg-primary', text: 'text-primary-foreground' },
@@ -56,6 +57,18 @@ export function OrdersPanel() {
     })
   }
 
+  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    await updateOrderStatus(orderId, newStatus)
+  }
+
+  const handleWhatsApp = (order: Parameters<typeof getWhatsAppMessage>[0], status: OrderStatus) => {
+    const msg = getWhatsAppMessage(order, status)
+    if (!msg) return
+    openWhatsApp(order.customer.phone, msg)
+  }
+
+  const whatsappStatuses: OrderStatus[] = ['preparando', 'pronto', 'entregue']
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-foreground mb-6">PEDIDOS</h1>
@@ -99,12 +112,13 @@ export function OrdersPanel() {
                 <th className="text-left p-4 text-foreground font-bold">Total</th>
                 <th className="text-left p-4 text-foreground font-bold">Status</th>
                 <th className="text-left p-4 text-foreground font-bold hidden lg:table-cell">Data</th>
+                <th className="text-left p-4 text-foreground font-bold hidden lg:table-cell">WhatsApp</th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
                     Nenhum pedido encontrado
                   </td>
                 </tr>
@@ -132,7 +146,7 @@ export function OrdersPanel() {
                       <td className="p-4">
                         <select
                           value={order.status}
-                          onChange={(e) => updateOrderStatus(order.id, e.target.value as OrderStatus)}
+                          onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
                           className={`px-3 py-1 rounded-full text-xs font-bold border-0 ${statusStyle.bg} ${statusStyle.text}`}
                         >
                           <option value="novo">Novo</option>
@@ -143,6 +157,21 @@ export function OrdersPanel() {
                       </td>
                       <td className="p-4 text-muted-foreground text-sm hidden lg:table-cell">
                         {format(new Date(order.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      </td>
+                      <td className="p-4 hidden lg:table-cell">
+                        <div className="flex gap-1">
+                          {whatsappStatuses.map(s => (
+                            <button
+                              key={s}
+                              onClick={() => handleWhatsApp(order, s)}
+                              title={`Enviar WhatsApp: ${statusLabels[s]}`}
+                              className="p-1.5 rounded-lg bg-green-600/10 hover:bg-green-600/20 text-green-500 transition-colors flex items-center gap-1 text-xs font-medium"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              <span className="hidden xl:inline">{statusLabels[s]}</span>
+                            </button>
+                          ))}
+                        </div>
                       </td>
                     </tr>
                   )
