@@ -86,6 +86,8 @@ export function MenuPanel() {
       category: (formData.category as Product['category']) || 'hamburgueres',
       image: formData.image || '/images/cremoso-burguer.jpg',
       active: formData.active ?? true,
+      isBestSeller: !!formData.isBestSeller,
+      isNew: !!formData.isNew,
     })
     setBusy(false)
     setIsAdding(false)
@@ -305,6 +307,29 @@ export function MenuPanel() {
                     className="bg-muted border-border"
                   />
                 </div>
+                <div className="space-y-3">
+                  <Label className="text-foreground">Badges</Label>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!formData.isBestSeller}
+                        onChange={(e) => setFormData({ ...formData, isBestSeller: e.target.checked, isNew: e.target.checked ? false : formData.isNew })}
+                        className="w-4 h-4 accent-primary"
+                      />
+                      <span className="text-sm text-foreground">🔥 Mais Pedido</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!formData.isNew}
+                        onChange={(e) => setFormData({ ...formData, isNew: e.target.checked, isBestSeller: e.target.checked ? false : formData.isBestSeller })}
+                        className="w-4 h-4 accent-primary"
+                      />
+                      <span className="text-sm text-foreground">🆕 Novidade</span>
+                    </label>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label className="text-foreground">Imagem</Label>
                   <div className="flex gap-2">
@@ -385,7 +410,15 @@ export function MenuPanel() {
                           <Image src={product.image} alt={product.name} fill className="object-cover" />
                         </div>
                         <div>
-                          <p className="font-bold text-foreground">{product.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-foreground">{product.name}</p>
+                            {product.isBestSeller && (
+                              <span className="text-[10px] bg-primary/20 text-primary font-bold px-1.5 py-0.5 rounded-full">🔥</span>
+                            )}
+                            {product.isNew && (
+                              <span className="text-[10px] bg-secondary/20 text-secondary-foreground font-bold px-1.5 py-0.5 rounded-full">🆕</span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
                             {product.description}
                           </p>
