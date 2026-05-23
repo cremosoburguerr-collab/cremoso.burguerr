@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { ShoppingBag, Clock, ChefHat, Package, Truck, RefreshCw, TrendingUp } from 'lucide-react'
-import type { OrderStatus } from '@/lib/types'
+import { ShoppingBag, Clock, ChefHat, Package, Truck, RefreshCw, TrendingUp, Phone, MapPin, Printer } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { useStore } from '@/lib/store'
+import type { Order, OrderStatus } from '@/lib/types'
+import { format } from 'date-fns'
 
 interface OrderRow {
   id: string
@@ -11,6 +14,54 @@ interface OrderRow {
   total: number
   createdAt: string
   customer: { name: string }
+}
+
+const statusColors: Record<OrderStatus, { bg: string; text: string }> = {
+  novo:       { bg: 'bg-primary',    text: 'text-primary-foreground' },
+  preparando: { bg: 'bg-secondary',  text: 'text-secondary-foreground' },
+  pronto:     { bg: 'bg-green-600',  text: 'text-white' },
+  entregue:   { bg: 'bg-muted',      text: 'text-muted-foreground' },
+}
+
+const statusLabels: Record<OrderStatus, string> = {
+  novo: 'NOVO', preparando: 'PREPARANDO', pronto: 'PRONTO', entregue: 'ENTREGUE',
+}
+
+function getNextStatus(s: OrderStatus): OrderStatus | null {
+  const flow: OrderStatus[] = ['novo', 'preparando', 'pronto', 'entregue']
+  const idx = flow.indexOf(s)
+  return idx < flow.length - 1 ? flow[idx + 1] : null
+}
+
+function handlePrint(order: Order) {
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  const obsLine = order.observation?.trim()
+    ? `\n      OBSERVAÇÃO:\n      ${order.observation.replace(/\n/g, '\n      ')}`
+    : ''
+  const content = `
+      CREMOSO BURGUER
+      ================
+      Pedido #${String(order.number).padStart(3, '0')}
+      ${format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm')}
+
+      Cliente: ${order.customer.name}
+      Tel: ${order.customer.phone}
+      End: ${order.customer.address}
+      Bairro: ${order.customer.neighborhood}
+
+      ITENS:
+      ${order.items.map(i => `${i.quantity}x ${i.product?.name}`).join('\n      ')}${obsLine}
+
+      Pagamento: ${order.paymentMethod?.toUpperCase()}
+      TOTAL: ${fmt(order.total)}
+    `
+  const win = window.open('', '_blank')
+  if (win) {
+    win.document.write(`<!DOCTYPE html><html><head><title>Pedido #${String(order.number).padStart(3,'0')}</title><style>body{font-family:monospace;font-size:14px;padding:20px}pre{white-space:pre-wrap}</style></head><body><pre>${content}</pre></body></html>`)
+    win.document.close()
+    win.focus()
+    win.print()
+  }
 }
 
 const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; color: string; bg: string }> = {
@@ -31,25 +82,33 @@ function avgDeliveryMinutes(orders: OrderRow[]): number | null {
 }
 
 export function DashboardPanel() {
-  const [orders, setOrders] = useState<OrderRow[]>([])
+  const { orders, loadOrders, updateOrderStatus } = useStore()
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/orders')
-      const json = await res.json()
-      setOrders(json.orders || [])
+      await loadOrders()
       setLastRefresh(new Date())
     } catch { /* silent */ }
     finally { setLoading(false) }
-  }, [])
+  }, [loadOrders])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    let cleanup: (() => void) | null = null
+    import('@/lib/api').then(({ subscribeToOrders }) => {
+      cleanup = subscribeToOrders(() => loadOrders())
+    })
+    return () => { if (cleanup) cleanup() }
+  }, [load, loadOrders])
 
   const todayStr = new Date().toISOString().slice(0, 10)
-  const todayOrders = orders.filter(o => o.createdAt?.slice(0, 10) === todayStr)
+  const todayOrders = orders.filter(o => {
+    const d = o.createdAt ? new Date(o.createdAt).toISOString().slice(0, 10) : ''
+    return d === todayStr
+  })
 
   const counts: Record<OrderStatus, number> = {
     novo:       orders.filter(o => o.status === 'novo').length,
@@ -58,17 +117,36 @@ export function DashboardPanel() {
     entregue:   orders.filter(o => o.status === 'entregue').length,
   }
 
-  const inProgress = orders.filter(o => o.status !== 'entregue')
+  const activeOrders = orders.filter(o => o.status !== 'entregue')
   const todayRevenue = todayOrders.reduce((s, o) => s + (o.total || 0), 0)
-  const avgMins = avgDeliveryMinutes(todayOrders)
+  const avgMins = avgDeliveryMinutes(todayOrders as OrderRow[])
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   const fmtTime = (d: Date) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
+  const handleStatusUpdate = async (order: Order, nextStatus: OrderStatus) => {
+    await updateOrderStatus(order.id, nextStatus)
+    if (nextStatus === 'pronto') {
+      let phone = order.customer.phone.replace(/\D/g, '')
+      if (phone.length === 10 || phone.length === 11) phone = '55' + phone
+      if (phone.length >= 12) {
+        const msg = `🚚 Seu pedido saiu para entrega!\n🍔 Pedido #${String(order.number).padStart(3, '0')}\nEm breve chegará até você!`
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+      }
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">DASHBOARD</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-foreground">DASHBOARD</h1>
+          {activeOrders.some(o => o.status === 'novo') && (
+            <span className="px-3 py-1 bg-primary text-primary-foreground text-sm font-bold rounded-full animate-pulse">
+              Novo pedido!
+            </span>
+          )}
+        </div>
         <button
           onClick={load}
           disabled={loading}
@@ -128,53 +206,113 @@ export function DashboardPanel() {
         </div>
       </div>
 
-      {/* Active orders */}
-      {inProgress.length > 0 && (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-border">
-            <h3 className="font-bold text-foreground text-sm">
-              Pedidos em andamento ({inProgress.length})
-            </h3>
+      {/* Active orders — card grid (same as kitchen panel) */}
+      <div>
+        <h2 className="text-lg font-bold text-foreground mb-4">
+          Pedidos em andamento {activeOrders.length > 0 && `(${activeOrders.length})`}
+        </h2>
+
+        {activeOrders.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <ShoppingBag className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p>Nenhum pedido no momento</p>
+            <p className="text-sm">Os novos pedidos aparecerão aqui automaticamente</p>
           </div>
-          <div className="divide-y divide-border">
-            {inProgress.slice(0, 8).map(o => {
-              const cfg = statusConfig[o.status]
-              const Icon = cfg.icon
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {activeOrders.map(order => {
+              const statusStyle = statusColors[order.status]
+              const nextStatus = getNextStatus(order.status)
               return (
-                <div key={o.id} className="flex items-center justify-between px-5 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-foreground text-sm">
-                      #{String(o.number).padStart(3, '0')}
-                    </span>
-                    <span className="text-muted-foreground text-sm truncate max-w-[120px]">
-                      {o.customer?.name}
+                <div key={order.id} className="bg-card border border-border rounded-lg overflow-hidden">
+                  {/* Header */}
+                  <div className="flex items-center justify-between p-4 border-b border-border">
+                    <div>
+                      <span className="text-xl font-bold text-foreground">
+                        #{String(order.number).padStart(3, '0')}
+                      </span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {format(new Date(order.createdAt), 'HH:mm')}
+                      </span>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusStyle.bg} ${statusStyle.text}`}>
+                      {statusLabels[order.status]}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-primary font-bold text-sm">{fmt(o.total)}</span>
-                    <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>
-                      <Icon className="w-3 h-3" />
-                      {cfg.label}
-                    </span>
+
+                  {/* Content */}
+                  <div className="p-4 space-y-3">
+                    <div className="space-y-2 text-sm">
+                      <p className="font-bold text-foreground">{order.customer.name}</p>
+                      <p className="flex items-center gap-2 text-muted-foreground">
+                        <Phone className="w-4 h-4" />{order.customer.phone}
+                      </p>
+                      <p className="flex items-center gap-2 text-muted-foreground">
+                        <MapPin className="w-4 h-4" />{order.customer.address}
+                      </p>
+                      <p className="text-muted-foreground pl-6">{order.customer.neighborhood}</p>
+                    </div>
+
+                    <div className="border-t border-border pt-3">
+                      <ul className="space-y-1">
+                        {order.items.map((item, idx) => (
+                          <li key={idx} className="text-sm text-foreground">
+                            {item.quantity}x {item.product?.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {order.observation && (
+                      <div className="border-t border-border pt-3">
+                        <p className="text-xs font-bold text-secondary mb-1">OBSERVAÇÃO:</p>
+                        <p className="text-sm text-foreground bg-secondary/10 rounded p-2 whitespace-pre-wrap">
+                          {order.observation}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="border-t border-border pt-3">
+                      <p className="text-sm text-muted-foreground">
+                        Pagamento: <span className="text-foreground capitalize">{order.paymentMethod}</span>
+                      </p>
+                      <p className="text-lg font-bold text-primary">{fmt(order.total)}</p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="p-4 border-t border-border flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePrint(order)}
+                      className="flex-1"
+                    >
+                      <Printer className="w-4 h-4 mr-2" />
+                      Imprimir
+                    </Button>
+                    {nextStatus && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleStatusUpdate(order, nextStatus)}
+                        className={`flex-1 ${
+                          nextStatus === 'preparando'
+                            ? 'bg-secondary text-secondary-foreground hover:bg-secondary/90'
+                            : nextStatus === 'pronto'
+                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/90'
+                        }`}
+                      >
+                        {statusLabels[nextStatus]}
+                      </Button>
+                    )}
                   </div>
                 </div>
               )
             })}
-            {inProgress.length > 8 && (
-              <p className="px-5 py-3 text-xs text-muted-foreground text-center">
-                +{inProgress.length - 8} pedidos
-              </p>
-            )}
           </div>
-        </div>
-      )}
-
-      {!loading && inProgress.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          <ShoppingBag className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">Nenhum pedido em andamento</p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
