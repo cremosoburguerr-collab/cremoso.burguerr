@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, CheckCircle2, Clock, ChefHat, Package, Truck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { Order, OrderStatus } from '@/lib/types'
+import type { Order, OrderStatus, EstimatedMinutes } from '@/lib/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -20,17 +20,24 @@ const statusSteps: { id: OrderStatus; label: string; icon: React.ElementType; de
   { id: 'entregue',   label: 'Entregue',   icon: Truck,    description: 'Seu pedido foi entregue' },
 ]
 
-const estimatedMinutes: Record<OrderStatus, number | null> = {
-  novo:       40,
-  preparando: 30,
-  pronto:     15,
-  entregue:   null,
-}
+const DEFAULT_MINUTES: EstimatedMinutes = { novo: 40, preparando: 30, pronto: 15 }
 
 export function OrderTracking({ order, onBack, onDelivered }: OrderTrackingProps) {
   const [currentStatus, setCurrentStatus] = useState<OrderStatus>(order.status)
   const [lastUpdate, setLastUpdate] = useState(new Date())
+  const [estMinutes, setEstMinutes] = useState<EstimatedMinutes>(DEFAULT_MINUTES)
   const deliveredCalled = useRef(false)
+
+  // Load configurable estimated minutes from settings
+  useEffect(() => {
+    fetch('/api/admin/settings')
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        const em = json?.settings?.estimatedMinutes
+        if (em?.novo && em?.preparando && em?.pronto) setEstMinutes(em)
+      })
+      .catch(() => { /* use defaults */ })
+  }, [])
 
   useEffect(() => {
     if (!order?.id) return
@@ -59,7 +66,10 @@ export function OrderTracking({ order, onBack, onDelivered }: OrderTrackingProps
   }, [order?.id, onDelivered])
 
   const currentStepIndex = statusSteps.findIndex((s) => s.id === currentStatus)
-  const estMins = estimatedMinutes[currentStatus]
+
+  const estMins: number | null = currentStatus === 'entregue'
+    ? null
+    : estMinutes[currentStatus as keyof EstimatedMinutes] ?? null
 
   const formatPrice = (price: number) =>
     price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

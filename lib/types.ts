@@ -70,6 +70,12 @@ export interface Order {
 
 export type StatusMode = 'automatic' | 'force_open' | 'force_closed'
 
+export interface EstimatedMinutes {
+  novo: number
+  preparando: number
+  pronto: number
+}
+
 export interface Settings {
   phone: string
   whatsapp: string
@@ -77,6 +83,7 @@ export interface Settings {
   openingHours: string
   workingDays: string[]
   statusMode: StatusMode
+  estimatedMinutes?: EstimatedMinutes
 }
 
 export type UserRole = 'admin' | 'entregador'

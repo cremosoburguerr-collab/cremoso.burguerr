@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Save, Plus, Trash2, Loader2, Clock, Calendar, ToggleLeft } from 'lucide-react'
+import { Save, Plus, Trash2, Loader2, Clock, Calendar, ToggleLeft, Timer } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +47,7 @@ export function SettingsPanel() {
     deliveryFee: 0,
     workingDays: ALL_DAYS,
     statusMode: 'automatic' as StatusMode,
+    estimatedMinutes: { novo: 40, preparando: 30, pronto: 15 },
   })
 
   const [bairros, setBairros] = useState<Bairro[]>([])
@@ -74,6 +75,11 @@ export function SettingsPanel() {
             deliveryFee: s.deliveryFee || 0,
             workingDays: Array.isArray(s.workingDays) && s.workingDays.length > 0 ? s.workingDays : ALL_DAYS,
             statusMode: s.statusMode || 'automatic',
+            estimatedMinutes: {
+              novo:       s.estimatedMinutes?.novo       ?? 40,
+              preparando: s.estimatedMinutes?.preparando ?? 30,
+              pronto:     s.estimatedMinutes?.pronto     ?? 15,
+            },
           })
         }
       } catch (err) {
@@ -370,6 +376,53 @@ export function SettingsPanel() {
                 Usada quando o bairro selecionado não tiver taxa definida.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Estimated Delivery Time */}
+        <div className="bg-card border border-border rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Timer className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-bold text-foreground">Tempo Estimado de Entrega</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Exibido automaticamente para o cliente no acompanhamento do pedido.
+          </p>
+          <div className="space-y-3">
+            {(
+              [
+                { key: 'novo',       label: 'Pedido recebido (aguardando)',  emoji: '🕐' },
+                { key: 'preparando', label: 'Em preparo na cozinha',         emoji: '👨‍🍳' },
+                { key: 'pronto',     label: 'Pronto / saindo para entrega',  emoji: '🛵' },
+              ] as const
+            ).map(({ key, label, emoji }) => (
+              <div key={key} className="flex items-center gap-3">
+                <span className="text-lg w-7 text-center">{emoji}</span>
+                <div className="flex-1">
+                  <Label className="text-foreground text-xs">{label}</Label>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="180"
+                    step="5"
+                    value={formData.estimatedMinutes[key]}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        estimatedMinutes: {
+                          ...formData.estimatedMinutes,
+                          [key]: Math.max(1, parseInt(e.target.value) || 1),
+                        },
+                      })
+                    }
+                    className="bg-muted border-border w-20 text-center"
+                  />
+                  <span className="text-sm text-muted-foreground w-6">min</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
