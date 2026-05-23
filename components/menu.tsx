@@ -92,6 +92,16 @@ export function Menu() {
                     className="object-cover group-hover:scale-105 transition-transform duration-300"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                   />
+                  {product.isBestSeller && (
+                    <span className="absolute top-2 left-2 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full leading-tight z-10">
+                      🔥 MAIS PEDIDO
+                    </span>
+                  )}
+                  {product.isNew && !product.isBestSeller && (
+                    <span className="absolute top-2 left-2 bg-secondary text-secondary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full leading-tight z-10">
+                      🆕 NOVIDADE
+                    </span>
+                  )}
                 </div>
 
                 <div className="p-4">

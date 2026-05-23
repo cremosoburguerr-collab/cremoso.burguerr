@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { AdminSidebar } from '@/components/admin/sidebar'
-import { KitchenPanel } from '@/components/admin/kitchen-panel'
+import { DashboardPanel } from '@/components/admin/dashboard-panel'
 
 export default function AdminPage() {
   const router = useRouter()
@@ -22,7 +22,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-background">
       <AdminSidebar />
       <main className="ml-64">
-        <KitchenPanel />
+        <DashboardPanel />
       </main>
     </div>
   )

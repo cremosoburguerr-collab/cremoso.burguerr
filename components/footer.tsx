@@ -100,7 +100,7 @@ export function Footer() {
               </div>
             </div>
             <p className="text-muted-foreground text-sm">
-              Hambúrgueres caprichados e absurdamente cremosos, o verdadeiro sabor do delivery que conquista!
+              Hambúrgueres caprichados e absurdamente cremosos, uma mordida e você entende o nome!
             </p>
           </div>
 

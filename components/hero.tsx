@@ -1,23 +1,14 @@
 'use client'
 
 import Image from 'next/image'
-import { MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useStore } from '@/lib/store'
 
 export function Hero() {
-  const { settings } = useStore()
-
   const scrollToMenu = () => {
     const menuSection = document.getElementById('cardapio')
     if (menuSection) {
       menuSection.scrollIntoView({ behavior: 'smooth' })
     }
-  }
-
-  const openWhatsApp = () => {
-    const message = encodeURIComponent('Olá! Gostaria de fazer um pedido.')
-    window.open(`https://wa.me/${settings.whatsapp}?text=${message}`, '_blank')
   }
 
   return (
@@ -44,24 +35,15 @@ export function Hero() {
             </h1>
             
             <p className="text-lg lg:text-xl text-muted-foreground mb-8 max-w-xl mx-auto lg:mx-0">
-              Hambúrgueres caprichados e absurdamente cremosos, o verdadeiro sabor do delivery que conquista!
+              Hambúrgueres caprichados e absurdamente cremosos, uma mordida e você entende o nome!
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+            <div className="flex justify-center lg:justify-start">
               <Button
                 onClick={scrollToMenu}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-lg px-8 py-6 rounded-lg glow-yellow"
               >
-                VER CARDÁPIO
-              </Button>
-              
-              <Button
-                onClick={openWhatsApp}
-                variant="outline"
-                className="border-2 border-secondary text-secondary hover:bg-secondary hover:text-secondary-foreground font-bold text-lg px-8 py-6 rounded-lg flex items-center gap-2"
-              >
-                <MessageCircle className="w-5 h-5" />
-                PEDIR PELO WHATSAPP
+                FAZER MEU PEDIDO
               </Button>
             </div>
           </div>

@@ -6,6 +6,8 @@ export interface Product {
   image: string
   category: string
   active: boolean
+  isBestSeller?: boolean
+  isNew?: boolean
 }
 
 export interface Addon {
