@@ -19,7 +19,7 @@ export default function CaixaPage() {
   return (
     <div className="flex h-screen bg-background">
       <AdminSidebar />
-      <main className="flex-1 ml-64 overflow-y-auto">
+      <main className="flex-1 ml-14 sm:ml-64 overflow-y-auto">
         <CaixaPanel />
       </main>
     </div>

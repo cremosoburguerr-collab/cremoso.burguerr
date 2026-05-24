@@ -21,7 +21,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-background">
       <AdminSidebar />
-      <main className="ml-64">
+      <main className="ml-14 sm:ml-64">
         <DashboardPanel />
       </main>
     </div>

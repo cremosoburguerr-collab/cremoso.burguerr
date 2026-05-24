@@ -21,7 +21,7 @@ export default function CardapioPage() {
   return (
     <div className="min-h-screen bg-background">
       <AdminSidebar />
-      <main className="ml-64">
+      <main className="ml-14 sm:ml-64">
         <MenuPanel />
       </main>
     </div>

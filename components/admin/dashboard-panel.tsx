@@ -137,10 +137,10 @@ export function DashboardPanel() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 overflow-x-hidden">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">DASHBOARD</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">DASHBOARD</h1>
           {activeOrders.some(o => o.status === 'novo') && (
             <span className="px-3 py-1 bg-primary text-primary-foreground text-sm font-bold rounded-full animate-pulse">
               Novo pedido!

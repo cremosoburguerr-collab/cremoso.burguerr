@@ -21,7 +21,7 @@ export default function UsuariosPage() {
   return (
     <div className="min-h-screen bg-background">
       <AdminSidebar />
-      <main className="ml-64">
+      <main className="ml-14 sm:ml-64">
         <UsersPanel />
       </main>
     </div>
